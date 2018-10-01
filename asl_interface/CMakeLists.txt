@@ -11,7 +11,7 @@ if(APPLE)
     set(ASL_SOURCES
     src/AmplInterface.cpp
     src/AssertUtils.hpp
-    src/fmemopen.c
+#    src/fmemopen.c
     )
 else()
     set(ASL_SOURCES
@@ -51,6 +51,16 @@ if (${WITH_AMPL})
    TARGET_INCLUDE_DIRECTORIES( pynumero_ASL PUBLIC ${ASL_INCLUDE_DIRS} )
    TARGET_LINK_LIBRARIES( pynumero_ASL ${ASL_LIBRARIES} ${CMAKE_DL_LIBS})
    INSTALL(TARGETS pynumero_ASL
-           DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
+           DESTINATION lib
           )
+   INSTALL(DIRECTORY src
+           DESTINATION include
+	   )
+   INSTALL(DIRECTORY ${ASL_INCLUDE_DIRS}
+           DESTINATION include
+	   )
+   INSTALL(FILES ${ASL_LIBRARIES}
+           DESTINATION lib
+	   )
+
 endif()

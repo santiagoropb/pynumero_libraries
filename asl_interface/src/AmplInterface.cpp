@@ -1,6 +1,6 @@
-#if defined(__APPLE__) && defined(__MACH__)
-#include "fmemopen.h"
-#endif
+//#if defined(__APPLE__) && defined(__MACH__)
+//#include "fmemopen.h"
+//#endif
 
 #include "AmplInterface.hpp"
 #include "AssertUtils.hpp"
@@ -401,17 +401,17 @@ AmplInterfaceStr::AmplInterfaceStr(char* nl, size_t size)
 FILE* AmplInterfaceStr::open_nl(ASL_pfgh *asl, char* stub)
 {
    // Ignore the stub and use the cached NL file content
-   #if defined(__APPLE__) && defined(__MACH__)
-   FILE* nl = fmemopen(this->nl_content, this->nl_size, "rb");
-   //return jac0dim_FILE(nl);
-   return NULL;
-   #elif defined(_WIN32)
-   return NULL;
-   #else
+   //#if defined(__APPLE__) && defined(__MACH__)
    //FILE* nl = fmemopen(this->nl_content, this->nl_size, "rb");
    //return jac0dim_FILE(nl);
    return NULL;
-   #endif
+   //   #elif defined(_WIN32)
+   //return NULL;
+   //#else
+   //FILE* nl = fmemopen(this->nl_content, this->nl_size, "rb");
+   //return jac0dim_FILE(nl);
+   //return NULL;
+   //#endif
 
 }
 
