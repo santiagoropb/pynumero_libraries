@@ -2,10 +2,7 @@
 cmake_minimum_required(VERSION 3.2)
 
 #set(USE_ASL_PATH "" CACHE FILEPATH "Set the path to the ASL solvers directory containing a compiled amplsolver.a library.")
-#message( STATUS "USE_ASL_PATH: " ${USE_ASL_PATH})
-
 set(MP_PATH "" CACHE FILEPATH "Set the path to the ampl-mp package to link against ampl-mp asl library")
-#message( STATUS "MP_PATH: " ${MP_PATH})
 
 # set the default directory for ASL
 set(DEFAULT_ASL_PATH "${PROJECT_SOURCE_DIR}/third_party/ASL/solvers")
@@ -25,9 +22,16 @@ endif()
 
 if (MP_PATH)
    ADD_LIBRARY( pynumero_ASL SHARED ${ASL_SOURCES})
+
+   FIND_LIBRARY(ASL_LIB
+	        NAMES asl libdasl
+                HINTS "${MP_PATH}/lib/"
+		)
+		
    set(ASL_INCLUDE_DIRS "${MP_PATH}/include/asl")
-   set( ASL_LIBRARIES "${MP_PATH}/lib/libasl.a" )
+   set( ASL_LIBRARIES "${ASL_LIB}" )
    set( WITH_AMPL true)
+   
 elseif(DEFAULT_ASL_PATH)
    ADD_LIBRARY( pynumero_ASL SHARED ${ASL_SOURCES})
    set(ASL_INCLUDE_DIRS "${DEFAULT_ASL_PATH}")
