@@ -1,7 +1,3 @@
-//#if defined(__APPLE__) && defined(__MACH__)
-//#include "fmemopen.h"
-//#endif
-
 #include "AmplInterface.hpp"
 #include "AssertUtils.hpp"
 #include "asl_pfgh.h"
