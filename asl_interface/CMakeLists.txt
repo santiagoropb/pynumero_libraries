@@ -11,7 +11,6 @@ if(APPLE)
     set(ASL_SOURCES
     src/AmplInterface.cpp
     src/AssertUtils.hpp
-#    src/fmemopen.c
     )
 else()
     set(ASL_SOURCES
