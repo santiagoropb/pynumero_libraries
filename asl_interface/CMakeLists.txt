@@ -55,11 +55,4 @@ if (${WITH_AMPL})
    INSTALL(DIRECTORY src
            DESTINATION include
 	   )
-   INSTALL(DIRECTORY ${ASL_INCLUDE_DIRS}
-           DESTINATION include
-	   )
-   INSTALL(FILES ${ASL_LIBRARIES}
-           DESTINATION lib
-	   )
-
 endif()
