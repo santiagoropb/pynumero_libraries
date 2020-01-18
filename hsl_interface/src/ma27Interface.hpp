@@ -37,39 +37,39 @@ class MA27_LinearSolver
 {
 public:
 
-  MA27_LinearSolver(double pivtol = 0.01);
+  MA27_LinearSolver(double pivtol = 0.01,
+                    double n_a_factor = 5.0,
+                    double n_iw_factor = 5.0,
+                    double memory_increase_factor = 2.0);
 
-  // TODO: ctypes destructor? free memory here
   ~MA27_LinearSolver();
-
-  // TODO: ask carl abount mangling of fortran names
-  void DoSymbolicFactorization(int nrowcols, int* irow, int* jcol, int nnonzeros);
 
   enum MA27_FACT_STATUS
     {
       MA27_SUCCESS=0,
       MA27_MATRIX_SINGULAR=1,
-      MA27_INCORRECT_INERTIA=2
+      MA27_INCORRECT_INERTIA=2,
+      MA27_WARNING=3,
+      MA27_ERROR=4
     };
 
-  MA27_FACT_STATUS DoNumericFactorization(int nrowcols, int nnonzeros, double* values, int desired_num_neg_evals=-1);
+  MA27_FACT_STATUS DoSymbolicFactorization(int nrowcols,
+                                           int* irow,
+                                           int* jcol,
+                                           int nnonzeros);
+
+  MA27_FACT_STATUS DoNumericFactorization(int nrowcols,
+                                          int nnonzeros,
+                                          double* values,
+                                          int desired_num_neg_evals=-1);
 
   void DoBacksolve(double* rhs, int nrhs, double* sol, int nsol);
 
-  int get_nnz()
-  {
-      return nnz_;
-  }
-
-  int get_dim()
-  {
-      return dim_;
-  }
-
-  int get_num_neg_evals()
-  {
-      return num_neg_evals_;
-  }
+  int get_nnz(){return nnz_;}
+  int get_dim(){return dim_;}
+  int get_n_iw(){return n_iw_;}
+  int get_n_a(){return n_a_;}
+  int get_num_neg_evals(){return num_neg_evals_;}
 
 private:
   // some members for error checking between calls
@@ -88,10 +88,14 @@ private:
   // extracted matrix structure
   int* irows_;
   int* jcols_;
-  
+
   // factors
   int n_a_;
   double* a_;
+
+  double n_a_factor_;
+  double n_iw_factor_;
+  double memory_increase_factor_;
 
   // MA27 parameters
   int* ikeep_;

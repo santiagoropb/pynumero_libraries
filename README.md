@@ -4,11 +4,12 @@ PyNumero libraries
 This repository contains a cmake project for building shared
 libraries for the python numerical optimization package PyNumero.
 
-The current version of PyNumero relies on two share libraries for
+The current version of PyNumero relies on share libraries for
 efficient numerical calculations while solving optimization problems
 
 1. libpynumero_ASL.so
-2. libpynumero_HSL.so
+2. libpynumero_MA27.so
+3. libpynumero_MA57.so (only available if linked against an existing ipopt installation)
 
 The first library, libpynumero_ASL, provides functionality for fast automatic
 differentiation (AD) subroutines required for computing first- and second-
@@ -16,58 +17,79 @@ oder derivatives necessary for gradient-based optimization algorithms. The
 subroutines for AD are the same ones used by AMPL nonlinear optimization
 solvers since libpynumero_ASL links with the ampl solver library ASL.
 
-The second library, libptnumero_HSL, provides functionality to interface
-with the MA27 linear solver that is available in the Harwell subroutine
-library. The linear solvers in HSL have proofed to be excellent direct
-solver for finding solutions of saddle point problems.
+The second and third libraries provide functionality to interface
+with HSL linear solvers available in the Harwell subroutine
+library.
 
 A conda-forge recipe has been created to facilitate the distribution of
-libpynumero_ASL without users requiring to compile any code. To get
+pynumero libraries without users requiring to compile any code. To get
 libpynumero_ASL library via conda-forge users may run:
 
 ```
 conda install -c conda-forge pynumero_libraries
 ```
 
-If conda is not available, compilation of libpynumero_ASL library can be
-achieve with the following steps:
+For open source linear solver we recommend installing
+
+```
+conda install -c conda-forge pymumps
+```
+
+If conda is not available, users that have a compiled version of IPOPT can use the following steps to build the libraries:
+
+```
+mkdir build
+cmake .. -DBUILD_ASL=ON -DIPOPT_PATH=<your-path-to-ipopt-install> -DCMAKE_INSTALL_PREFIX=../pynumero-install
+make
+make install
+```
+
+The libraries are then compiled and copied into ../pynumero-install. If the user has a compiled version of ipopt with HSL solver and would like to compile MA27 or MA57 libraries, the options -DBUILD_MA27=ON and -DMBUILD_MA57=ON can be used. 
+
+If a compiled version of ipopt is not available, users will need to get the source code for ASL and MA27
+
 ```
 cd /third_party/ASL
 ./get.ASL.sh
 cd solvers
 ./configurehere
 ```
-if compiling from linux:
+
+If compiling from linux:
 ```
-find . -name "makefile" -exec sed -i "s/CFLAGS = -DNo_dtoa -fPIC -O/CFLAGS = -fPIC -O/g" {} \;
+find . -name "makefile" -exec sed -i "s/CFLAGS = -DNo_dtoa -fPIC -O/CFLAGS = -fPIC -O/g" {} \; 
+```
+If compiling from mac:
+```
+find . -name "makefile" -exec sed -i 's/CFLAGS = -DNo_dtoa -fPIC -O/CFLAGS = -fPIC -O/g' {} \; 
+```
+
+Then
+
+```
 make
 cd ../../../
 mkdir build
 cd build
-cmake .. -DBUILD_SHARED_LIBS=ON -DBUILD_ASL=ON
+cmake .. -DBUILD_ASL=ON -DCMAKE_INSTALL_PREFIX=../pynumero-install
 make
-```	
-if compiling from mac:
+make install
 ```
-find . -name "makefile" -exec sed -ie 's/CFLAGS = -DNo_dtoa -fPIC -O/CFLAGS = -fPIC -O/g' {} \;
-make
-cd ../../../
-mkdir build
-cd build
-cmake .. -DBUILD_SHARED_LIBS=ON -DBUILD_ASL=ON
-make
-```
+
 If ASL (AMPL-MP) is installed already, users can compile and link libpynumero_ASL as follows:
 
 ```
-cmake .. -DMP_PATH=<PATH_TO_ASL> -DBUILD_SHARED_LIBS=ON -DBUILD_ASL=ON
+cmake .. -DMP_PATH=<PATH_TO_AMPL-MP>  -DBUILD_ASL=ON -DCMAKE_INSTALL_PREFIX=../pynumero-install
 make
+make install
 ```
 
-To compile the HSL library, download the HSL code from http://hsl.rl.ac.uk/ipopt. Unpack the archive, then move and rename the resulting directory so that it becomes /third_party/HSL/coinhsl. 
+To compile the MA27 library, download the HSL code from http://hsl.rl.ac.uk/ipopt. Unpack the archive, then move and rename the resulting directory so that it becomes /third_party/HSL/coinhsl. 
 
 ```
-cmake .. -DBUILD_SHARED_LIBS=ON -DBUILD_HSL=ON
+cmake .. -DBUILD_MA27=ON -DCMAKE_INSTALL_PREFIX=../pynumero-install
+make
+make install
 ```
 
-Once the libraries have been compiled can be moved to pyomo/contrib/pynumero/extension/lib/<OS>
+Once the libraries have been compiled they can be moved to pyomo/contrib/pynumero/extension/lib/<OS>

@@ -27,7 +27,7 @@ void AmplInterface::initialize(const char *nlfilename)
    // the local variable "asl".
    // For example:
    // #define X0		asl->i.X0_
-   // Therefore, in many of these methods, you will 
+   // Therefore, in many of these methods, you will
    // often see the assignment the asl pointer followed
    // by calls to the macros from the ASL.
 
@@ -84,20 +84,20 @@ void AmplInterface::initialize(const char *nlfilename)
 
    // read the options and get the name of the .nl file (stub)
    char *stub = getstops(argv.data(), oi);
-   
+
    delete[] oi->sname;
    oi->sname = NULL;
    delete[] oi->bsname;
    oi->bsname = NULL;
    delete[] oi->opname;
-   oi->opname = NULL;   
+   oi->opname = NULL;
    // this pointer may need to be stored for the call to write_sol
    //delete oi;
 
    FILE *nl = this->open_nl(asl, stub);
    _ASSERT_(nl != NULL);
 
-   // want initial values for the variables and the 
+   // want initial values for the variables and the
    // multipliers
    want_xpi0 = 1 | 2;
    // allocate space in the ASL structure for the initial values
@@ -108,7 +108,7 @@ void AmplInterface::initialize(const char *nlfilename)
 
    _ASSERT_EXIT_(n_var > 0, "Problem does not have any continuous variables");
    _ASSERT_EXIT_(nbv == 0 && niv == 0, "PyNumero does not support discrete variables");
-   _ASSERT_EXIT_(nwv == 0 && nlnc == 0 && lnc == 0, 
+   _ASSERT_EXIT_(nwv == 0 && nlnc == 0 && lnc == 0,
                  "PyNumero does not support network constraints");
    _ASSERT_EXIT_(n_cc == 0, "PyNumero does not support complementarities");
 
@@ -376,7 +376,7 @@ void AmplInterface::finalize_solution(int ampl_solve_result_num, char* msg, doub
     ASL_pfgh *asl = _p_asl;
     _ASSERT_(asl);
     _ASSERT_(const_x && const_lam);
-    
+
     // set the AMPL solver status'
     _ASSERT_MSG_(ampl_solve_result_num >= 0 && ampl_solve_result_num < 600,
                  "ampl_solve_result_num must be between 0 and 599 in AmplInterface::finalize_solution");
@@ -418,7 +418,115 @@ FILE* AmplInterfaceStr::open_nl(ASL_pfgh *asl, char* stub)
 
 }
 
+#if defined(_WIN32) || defined(_WIN64)
+extern "C"
+{
+	__declspec(dllexport) AmplInterface *EXTERNAL_AmplInterface_new_file(char *nlfilename) {
+      AmplInterface* ans = new AmplInterfaceFile();
+      ans->initialize(nlfilename);
+      return ans;
+   }
 
+	__declspec(dllexport) AmplInterface *EXTERNAL_AmplInterface_new_str(char *nl, size_t size) {
+      AmplInterface* ans = new AmplInterfaceStr(nl, size);
+      ans->initialize("membuf.nl");
+      return ans;
+   }
+
+	__declspec(dllexport) AmplInterface *EXTERNAL_AmplInterface_new(char *nlfilename) {
+      return EXTERNAL_AmplInterface_new_file(nlfilename);
+   }
+
+	__declspec(dllexport) int EXTERNAL_AmplInterface_n_vars(AmplInterface *p_ai) {
+      return p_ai->get_n_vars();
+   }
+
+	__declspec(dllexport) int EXTERNAL_AmplInterface_n_constraints(AmplInterface *p_ai) {
+      return p_ai->get_n_constraints();
+   }
+
+	__declspec(dllexport) int EXTERNAL_AmplInterface_nnz_jac_g(AmplInterface *p_ai) {
+	   return p_ai->get_nnz_jac_g();
+   }
+
+	__declspec(dllexport) int EXTERNAL_AmplInterface_nnz_hessian_lag(AmplInterface *p_ai) {
+      return p_ai->get_nnz_hessian_lag();
+   }
+
+	__declspec(dllexport) void EXTERNAL_AmplInterface_x_lower_bounds(AmplInterface *p_ai, double *invec, int n) {
+      p_ai->get_lower_bounds_x(invec, n);
+   }
+
+	__declspec(dllexport) void EXTERNAL_AmplInterface_x_upper_bounds(AmplInterface *p_ai, double *invec, int n) {
+      p_ai->get_upper_bounds_x(invec, n);
+   }
+
+	__declspec(dllexport) void EXTERNAL_AmplInterface_g_lower_bounds(AmplInterface *p_ai, double *invec, int m) {
+      p_ai->get_lower_bounds_g(invec, m);
+   }
+
+	__declspec(dllexport) void EXTERNAL_AmplInterface_g_upper_bounds(AmplInterface *p_ai, double *invec, int m) {
+      p_ai->get_upper_bounds_g(invec, m);
+   }
+
+	__declspec(dllexport) void EXTERNAL_AmplInterface_get_init_x(AmplInterface *p_ai, double *invec, int n) {
+      p_ai->get_init_x(invec, n);
+   }
+
+	__declspec(dllexport) void EXTERNAL_AmplInterface_get_init_multipliers(AmplInterface *p_ai, double *invec, int n) {
+      p_ai->get_init_multipliers(invec, n);
+   }
+
+	__declspec(dllexport) bool EXTERNAL_AmplInterface_eval_f(AmplInterface *p_ai, double *invec, int n, double& f) {
+      return p_ai->eval_f(invec, n, f);
+   }
+
+	__declspec(dllexport) bool EXTERNAL_AmplInterface_eval_deriv_f(AmplInterface *p_ai, double *const_x, double *deriv_f, int nx) {
+      return p_ai->eval_deriv_f(const_x, deriv_f, nx);
+   }
+
+   __declspec(dllexport) bool EXTERNAL_AmplInterface_eval_g(AmplInterface *p_ai, double *const_x, int nx, double *g, int ng) {
+      return p_ai->eval_g(const_x, nx, g, ng);
+   }
+
+   __declspec(dllexport) void EXTERNAL_AmplInterface_struct_jac_g(AmplInterface *p_ai, int *irow, int *jcol, int nnz_jac_g) {
+      p_ai->struct_jac_g(irow, jcol, nnz_jac_g);
+   }
+
+   __declspec(dllexport) bool EXTERNAL_AmplInterface_eval_jac_g(AmplInterface *p_ai, double *const_x, int nx, double *jac_g_values,
+                                          int nnz_jac_g) {
+      return p_ai->eval_jac_g(const_x, nx, jac_g_values, nnz_jac_g);
+   }
+
+   __declspec(dllexport) void EXTERNAL_AmplInterface_struct_hes_lag(AmplInterface *p_ai, int *irow, int *jcol,
+                                              int nnz_hes_lag) {
+      p_ai->struct_hes_lag(irow, jcol, nnz_hes_lag);
+   }
+
+   __declspec(dllexport) bool EXTERNAL_AmplInterface_eval_hes_lag(AmplInterface *p_ai, double *const_x, int nx,
+                                            double *const_lam, int nc, double *hes_lag,
+                                            int nnz_hes_lag, double obj_factor) {
+      return p_ai->eval_hes_lag(const_x, nx, const_lam, nc, hes_lag, nnz_hes_lag, obj_factor);
+   }
+
+   __declspec(dllexport) void EXTERNAL_AmplInterface_finalize_solution(AmplInterface *p_ai,
+                                                 int ampl_solve_result_num,
+                                                 char* msg,
+                                                 double *const_x, int nx,
+                                                 double *const_lam, int nc) {
+      p_ai->finalize_solution(ampl_solve_result_num, msg,
+                              const_x, nx, const_lam, nc);
+   }
+
+   __declspec(dllexport) void EXTERNAL_AmplInterface_free_memory(AmplInterface *p_ai) {
+      p_ai->~AmplInterface();
+   }
+
+   __declspec(dllexport) void EXTERNAL_AmplInterface_dummy(AmplInterface *p_ai) {
+       std::cout<<"hola\n";
+   }
+}
+#else
 extern "C"
 {
    AmplInterface *EXTERNAL_AmplInterface_new_file(char *nlfilename) {
@@ -472,11 +580,11 @@ extern "C"
    void EXTERNAL_AmplInterface_get_init_x(AmplInterface *p_ai, double *invec, int n) {
       p_ai->get_init_x(invec, n);
    }
-   
+
    void EXTERNAL_AmplInterface_get_init_multipliers(AmplInterface *p_ai, double *invec, int n) {
       p_ai->get_init_multipliers(invec, n);
    }
-   
+
    bool EXTERNAL_AmplInterface_eval_f(AmplInterface *p_ai, double *invec, int n, double& f) {
       return p_ai->eval_f(invec, n, f);
    }
@@ -512,7 +620,7 @@ extern "C"
    void EXTERNAL_AmplInterface_finalize_solution(AmplInterface *p_ai,
                                                  int ampl_solve_result_num,
                                                  char* msg,
-                                                 double *const_x, int nx, 
+                                                 double *const_x, int nx,
                                                  double *const_lam, int nc) {
       p_ai->finalize_solution(ampl_solve_result_num, msg,
                               const_x, nx, const_lam, nc);
@@ -525,6 +633,5 @@ extern "C"
    void EXTERNAL_AmplInterface_dummy(AmplInterface *p_ai) {
        std::cout<<"hola\n";
    }
-
 }
-
+#endif

@@ -1,5 +1,6 @@
 #include "ma27Interface.hpp"
 #include <algorithm>
+#include <limits>
 
 #define F77_FUNC(name,NAME) name ## _
 
@@ -21,7 +22,10 @@ extern "C"
                                int* ICNTL, double* CNTL);
 }
 
-MA27_LinearSolver::MA27_LinearSolver(double pivtol /* = 1e-4*/)
+MA27_LinearSolver::MA27_LinearSolver(double pivtol,
+                                     double n_a_factor,
+                                     double n_iw_factor,
+                                     double memory_increase_factor)
   :
   nnz_(0),
   dim_(0),
@@ -34,6 +38,9 @@ MA27_LinearSolver::MA27_LinearSolver(double pivtol /* = 1e-4*/)
   ikeep_(NULL),
   nsteps_(0),
   maxfrt_(0),
+  n_a_factor_(n_a_factor),
+  n_iw_factor_(n_iw_factor),
+  memory_increase_factor_(memory_increase_factor),
   num_neg_evals_(-1)
 {
   // initialize the options to their defaults
@@ -53,8 +60,10 @@ MA27_LinearSolver::~MA27_LinearSolver()
   //  backsolve_timer_.PrintTotal(std::cout, "backsolve time");
 }
 
-void MA27_LinearSolver::DoSymbolicFactorization(int nrowcols, int* irow, int* jcol, int nnonzeros)
+MA27_LinearSolver::MA27_FACT_STATUS MA27_LinearSolver::DoSymbolicFactorization(int nrowcols, int* irow, int* jcol, int nnonzeros)
 {
+
+  MA27_LinearSolver::MA27_FACT_STATUS status = MA27_SUCCESS;
 
   delete [] iw_;
   iw_ = NULL;
@@ -75,7 +84,6 @@ void MA27_LinearSolver::DoSymbolicFactorization(int nrowcols, int* irow, int* jc
   ikeep_ = NULL;
 
   dim_ = nrowcols;
-
   nnz_ = nnonzeros;
 
   irows_ = new int[nnz_];
@@ -85,8 +93,9 @@ void MA27_LinearSolver::DoSymbolicFactorization(int nrowcols, int* irow, int* jc
   std::copy(irow, irow + nnonzeros, irows_);
   std::copy(jcol, jcol + nnonzeros, jcols_);
 
-  // overestimate size by 2
-  n_iw_ = 4*(2*nnz_+3*dim_+1);
+  // allocate work space memory
+  int overestimate_factor_n_iw = 2; // overestimate size by 2
+  n_iw_ = overestimate_factor_n_iw * (2*nnz_+3*dim_+1);
   iw_ = new int[n_iw_];
 
   ikeep_ = new int[3*dim_];
@@ -98,34 +107,74 @@ void MA27_LinearSolver::DoSymbolicFactorization(int nrowcols, int* irow, int* jc
   int INFO[20];
   int* IW1 = new int[2*dim_];
 
-  F77_FUNC(ma27ad,MA27AD)(&N, &NZ, irows_, jcols_, iw_, &n_iw_, ikeep_, IW1, &nsteps_,
-	  &IFLAG, icntl_, cntl_, INFO, &OPS);
+  // find sequence of pivots
+  F77_FUNC(ma27ad,MA27AD)(&N,
+                          &NZ,
+                          irows_,
+                          jcols_,
+                          iw_,
+                          &n_iw_,
+                          ikeep_,
+                          IW1,
+                          &nsteps_,
+	                        &IFLAG,
+                          icntl_,
+                          cntl_,
+                          INFO,
+                          &OPS);
   delete [] IW1;
 
+  // check info pointer
   int retflag = INFO[0];
+  int errorflag = INFO[1];
   if (retflag != 0) {
-    if (retflag == 1) {
-      std::cerr << "An index of the matrix is out of range" << std::endl;
-      exit(1);
-    }
-    std::cerr << "Unknown error in ma27ad_" << std::endl;
-    exit(1);
+    std::cerr << "Error in ma27ad_ with INFO[0]="
+              <<retflag <<" and INFO[1]=" << errorflag << std::endl;
+    status = MA27_ERROR;
   }
 
-  // retflag == 0
-
+  // allocate memory for numerical factorization
   int recommended_n_iw = INFO[5];
-  n_iw_ = 20*recommended_n_iw;
+
+  int max_n_iw = static_cast<int>(std::numeric_limits<int>::max() / n_iw_factor_);
+  if (recommended_n_iw <= max_n_iw){
+    n_iw_ = static_cast<int>(n_iw_factor_ * recommended_n_iw);
+  }
+  else{
+    n_iw_ = static_cast<int>(recommended_n_iw);
+  }
+
+  // check numeric_limits
+  if (n_iw_ < 0 || n_iw_ > std::numeric_limits<int>::max())
+  {
+    std::cerr << "IW array needs too much memory. Quitting" << '\n';
+    status = MA27_ERROR;
+  }
+
   delete [] iw_;
   iw_ = NULL;
   iw_ = new int[n_iw_];
 
   int recommended_n_a = INFO[4];
+  int max_n_a = static_cast<int>(std::numeric_limits<int>::max() / n_a_factor_);
+  double factor = 1.0;
+  if (recommended_n_a <= max_n_a){
+    factor = n_a_factor_;
+  }
+  n_a_ = std::max(nnz_, static_cast<int>(factor * recommended_n_a));
 
-  n_a_ = (nnz_ > 20*recommended_n_a) ? nnz_ : 60*recommended_n_a;
+  // check numeric_limits
+  if (n_a_ < 0 || n_a_ > std::numeric_limits<int>::max())
+  {
+    std::cerr << "A array needs too much memory. Quitting" << '\n';
+    status = MA27_ERROR;
+  }
+
   delete [] a_;
   a_ = NULL;
   a_ = new double[n_a_];
+
+  return status;
 }
 
 MA27_LinearSolver::MA27_FACT_STATUS MA27_LinearSolver::DoNumericFactorization(int nrowcols, int nnonzeros, double* values, int desired_num_neg_evals)
@@ -137,7 +186,6 @@ MA27_LinearSolver::MA27_FACT_STATUS MA27_LinearSolver::DoNumericFactorization(in
   MA27_LinearSolver::MA27_FACT_STATUS status = MA27_SUCCESS;
   int N = dim_;
   int NZ = nnz_;
-  int* IW1 = new int[2*dim_];
   int INFO[20];
 
   // reset number of negative eigenvalues
@@ -146,62 +194,133 @@ MA27_LinearSolver::MA27_FACT_STATUS MA27_LinearSolver::DoNumericFactorization(in
   // copy data
   std::copy(values, values + nnonzeros, a_);
 
-  F77_FUNC(ma27bd,MA27BD)(&N, &NZ, irows_, jcols_, a_, &n_a_, iw_, &n_iw_, ikeep_, &nsteps_, 
-	  &maxfrt_, IW1, icntl_, cntl_, INFO);
-  
-  delete [] IW1;
+  int count_iters = 0;
+  int max_iters = 20;
+  int fact_error = 1;
+  while(fact_error > 0 && count_iters<max_iters){
+    int* IW1 = new int[2*dim_];
+    F77_FUNC(ma27bd,MA27BD)(&N,
+                            &NZ,
+                            irows_,
+                            jcols_,
+                            a_,
+                            &n_a_,
+                            iw_,
+                            &n_iw_,
+                            ikeep_,
+                            &nsteps_,
+  	                        &maxfrt_,
+                            IW1,
+                            icntl_,
+                            cntl_,
+                            INFO);
+    delete [] IW1;
 
-  int retflag = INFO[0];
-  if (retflag == -3) {
-    std::cerr << "Error in MA27, n_iw_ is too small" << std::endl;
-    exit(1);
-  }
-  else if (retflag == -4) {
-    std::cerr << "Error in MA27, n_a_ is too small" << std::endl;
-    exit(1);
-  }
-  else if (retflag == -5) {
-//    std::cerr << "Error in MA27, matrix is singular" << std::endl;
-//    exit(1);
-    status = MA27_MATRIX_SINGULAR;
+    int retflag = INFO[0];
+    int errorflag = INFO[1];
 
+    if (retflag == 0) {
+      fact_error = 0;
+    }
+
+    double recomended_value = errorflag;
+    if (retflag == -3) {
+      delete [] iw_;
+      iw_ = NULL;
+      delete [] a_;
+      a_ = NULL;
+      n_iw_ = static_cast<int>(memory_increase_factor_ * recomended_value);
+      n_a_ = static_cast<int>(memory_increase_factor_ * n_a_);
+
+      // check numeric_limits
+      if (n_iw_ < 0 || n_iw_ > std::numeric_limits<int>::max())
+      {
+        std::cerr << "IW array needs too much memory. Quitting" << '\n';
+        return MA27_ERROR;
+      }
+      if (n_a_ < 0 || n_a_ > std::numeric_limits<int>::max())
+      {
+        std::cerr << "A array needs too much memory. Quitting" << '\n';
+        return MA27_ERROR;
+      }
+
+      std::cout << "Reallocating memory for MA27: liw " << n_iw_ <<"\n";
+      std::cout << "Reallocating memory for MA27: la " << n_a_ <<"\n";
+      iw_ = new int[n_iw_];
+      a_ = new double[n_a_];
+
+    }
+    else if (retflag == -4) {
+      delete [] iw_;
+      iw_ = NULL;
+      delete [] a_;
+      a_ = NULL;
+      n_iw_ = static_cast<int>(memory_increase_factor_ * n_iw_);
+      n_a_ = static_cast<int>(memory_increase_factor_ * recomended_value);
+
+      // check numeric_limits
+      if (n_iw_ < 0 || n_iw_ > std::numeric_limits<int>::max())
+      {
+        std::cerr << "IW array needs too much memory. Quitting" << '\n';
+        return MA27_ERROR;
+      }
+      if (n_a_ < 0 || n_a_ > std::numeric_limits<int>::max())
+      {
+        std::cerr << "A array needs too much memory. Quitting" << '\n';
+        return MA27_ERROR;
+      }
+
+      std::cout << "Reallocating memory for MA27: liw " << n_iw_ <<"\n";
+      std::cout << "Reallocating memory for MA27: la " << n_a_ <<"\n";
+      iw_ = new int[n_iw_];
+      a_ = new double[n_a_];
+    }
+    else if (retflag == -5) {
+      return MA27_MATRIX_SINGULAR;
+    }
+    else if (retflag == 3) {
+      return MA27_MATRIX_SINGULAR;
+    }
+    else if (retflag < 0) {
+      std::cerr << "Error in ma27ad_ with INFO[0]="
+                <<retflag <<" and INFO[1]=" << errorflag << std::endl;
+      return MA27_ERROR;
+    }
+    else if (retflag > 0) {
+      std::cerr << "Error in ma27ad_ with INFO[0]="
+                <<retflag <<" and INFO[1]=" << errorflag << std::endl;
+      return MA27_WARNING;
+    }
+    ++count_iters;
   }
-  else if (retflag == 3) {
-    //    std::cout << "Warning in MA27, rank deficiency detected" << std::endl;
-    //    std::cerr << "Error in MA27, rank deficiency detected" << std::endl;
-    //    exit(1);
-    status = MA27_MATRIX_SINGULAR;
-  }
-  else if (retflag != 0) {
-    std::cerr << "Error in MA27." << std::endl;
-    exit(1);
+
+  if(count_iters >= max_iters)
+  {
+    std::cerr << "Reallocated memory "<<count_iters<< "times. Quitting"<< '\n';
+    return MA27_ERROR;
   }
 
   int num_int_compressions = INFO[12];
   int num_double_compressions = INFO[11];
   if (num_int_compressions >= 10) {
     std::cerr << "MA27: Number of integer compressions is high - increase n_iw_" << std::endl;
-    exit(1);
+    return MA27_ERROR;
   }
-  
+
   if (num_double_compressions >= 10) {
     std::cerr << "MA27: Number of double compressions is high - increase n_a_" << std::endl;
-    exit(1);
+    return MA27_ERROR;
   }
 
   int num_neg_evals = INFO[14];
   if (desired_num_neg_evals != -1 && desired_num_neg_evals != num_neg_evals) {
-//    std::cerr << "MA27: Number of negative eigenvalues is not correct" << std::endl;
-//    exit(1);
     if (status != MA27_MATRIX_SINGULAR)
     {
         status = MA27_INCORRECT_INERTIA;
         num_neg_evals_ = num_neg_evals;
     }
-
   }
   return status;
-
 }
 
 void MA27_LinearSolver::DoBacksolve(double* rhs, int nrhs, double* sol, int nsol)
@@ -230,11 +349,25 @@ void MA27_LinearSolver::DoBacksolve(double* rhs, int nrhs, double* sol, int nsol
 extern "C"
 {
 
-MA27_LinearSolver* EXTERNAL_MA27Interface_new(double pivot)
-{ return new MA27_LinearSolver(pivot);}
+MA27_LinearSolver* EXTERNAL_MA27Interface_new(double pivot,
+                                              double n_a_factor,
+                                              double n_iw_factor,
+                                              double memory_increase_factor)
+{
+  return new MA27_LinearSolver(pivot,
+                               n_a_factor,
+                               n_iw_factor,
+                               memory_increase_factor);
+}
 
 int EXTERNAL_MA27Interface_get_nnz(MA27_LinearSolver* p_hi)
 { return p_hi->get_nnz();}
+
+int EXTERNAL_MA27Interface_get_n_iw(MA27_LinearSolver* p_hi)
+{ return p_hi->get_n_iw();}
+
+int EXTERNAL_MA27Interface_get_n_a(MA27_LinearSolver* p_hi)
+{ return p_hi->get_n_a();}
 
 int EXTERNAL_MA27Interface_get_dim(MA27_LinearSolver* p_hi)
 { return p_hi->get_dim();}
@@ -242,12 +375,15 @@ int EXTERNAL_MA27Interface_get_dim(MA27_LinearSolver* p_hi)
 int EXTERNAL_MA27Interface_get_num_neg_evals(MA27_LinearSolver* p_hi)
 { return p_hi->get_num_neg_evals();}
 
-void EXTERNAL_MA27Interface_do_symbolic_factorization(MA27_LinearSolver* p_hi,
+int EXTERNAL_MA27Interface_do_symbolic_factorization(MA27_LinearSolver* p_hi,
                                                       int nrowcols,
                                                       int* irow,
                                                       int* jcol,
                                                       int nnonzeros)
-{p_hi->DoSymbolicFactorization(nrowcols, irow, jcol, nnonzeros);}
+{
+  int status = p_hi->DoSymbolicFactorization(nrowcols, irow, jcol, nnonzeros);
+  return status;
+}
 
 int EXTERNAL_MA27Interface_do_numeric_factorization(MA27_LinearSolver* p_hi,
                                                      int nrowcols,
@@ -265,4 +401,3 @@ void EXTERNAL_MA27Interface_free_memory(MA27_LinearSolver* p_hi)
 {p_hi->~MA27_LinearSolver();}
 
 }
-

@@ -1,42 +1,73 @@
-
 enable_language(Fortran)
 set(DEFAULT_COIN_HSL_PATH "${PROJECT_SOURCE_DIR}/third_party/HSL/coinhsl" )
 
-# get the coinhsl library
 if (USE_COIN_HSL_PATH)
-    ADD_LIBRARY( coinhsl STATIC	"${USE_COIN_HSL_PATH}/ma27/ma27d.f")
-    SET( COIN_HSL_INCLUDE_DIRS "${USE_COIN_HSL_PATH}/ma27")
-    SET_PROPERTY(TARGET coinhsl PROPERTY POSITION_INDEPENDENT_CODE ON)
-    SET(COIN_HSL_LIBRARIES coinhsl)
-    SET( WITH_HSL true)
+  SET(HSL_FILES ${USE_COIN_HSL_PATH})
 elseif(DEFAULT_COIN_HSL_PATH)
-    ADD_LIBRARY( coinhsl STATIC "${DEFAULT_COIN_HSL_PATH}/ma27/ma27d.f")
-    SET(COIN_HSL_INCLUDE_DIRS "${DEFAULT_COIN_HSL_PATH}/ma27")
-    SET_PROPERTY(TARGET coinhsl PROPERTY POSITION_INDEPENDENT_CODE ON)
-    SET(COIN_HSL_LIBRARIES coinhsl)
-    SET( WITH_HSL true)
-else()
-    # for now throw an error - when we support more linear solvers, we can
-    # allow this to proceed
-    MESSAGE( FATAL_ERROR "This software currently requires MA27 provided by coinhsl. Please set USE_COIN_HSL_PATH to the location of coinhsl codes." )
-    SET(COIN_HSL_LIRARIES "")
-    MESSAGE( STATUS "*** HSL support not included - set USE_COIN_HSL_PATH to compile in HSL support." )
-    SET( COIN_HSL_INCLUDE_DIRS "" )
-    SET( WITH_HSL false)
+  SET(HSL_FILES ${DEFAULT_COIN_HSL_PATH})
 endif()
 
-if (${WITH_HSL})
-    MESSAGE("-- COIN_HSL_INCLUDE_DIRS ${COIN_HSL_INCLUDE_DIRS}")
-    SET(BLAS_LAPACK_INCLUDE_DIRS "")
-    SET(BLAS_LAPACK_LIBRARIES "")
-    ADD_LIBRARY(pynumero_HSL SHARED src/ma27Interface.cpp)
-    SET_PROPERTY(TARGET pynumero_HSL PROPERTY POSITION_INDEPENDENT_CODE ON)
-    TARGET_INCLUDE_DIRECTORIES( pynumero_HSL PUBLIC ${BLAS_LAPACK_INCLUDE_DIRS} PUBLIC ${COIN_HSL_INCLUDE_DIRS})
-    TARGET_LINK_LIBRARIES( pynumero_HSL ${BLAS_LAPACK_LIBRARIES} ${COIN_HSL_LIBRARIES} ${CMAKE_DL_LIBS} gfortran)
-    INSTALL(TARGETS pynumero_HSL		
-            DESTINATION lib
-           )
-    INSTALL(DIRECTORY src
-            DESTINATION include
-	   )
+if (${BUILD_MA27})
+
+  ADD_LIBRARY(pynumero_MA27 SHARED src/ma27Interface.cpp)
+
+  if (IPOPT_PATH)
+    SET( MA27_INCLUDE_DIRS "")
+    FIND_LIBRARY(HSL_IPOPT_LIB
+                 NAMES coinhsl libcoinhsl
+                 HINTS "${IPOPT_PATH}/lib/"
+                 )
+    SET(MA27_LIBRARY "")
+  else()
+    SET(HSL_IPOPT_LIB "")
+    SET( MA27_INCLUDE_DIRS "${HSL_FILES}/ma27")
+    ADD_LIBRARY( ma27 STATIC "${HSL_FILES}/ma27/ma27d.f")
+    SET_PROPERTY(TARGET ma27 PROPERTY POSITION_INDEPENDENT_CODE ON)
+    SET(MA27_LIBRARY ma27)
+    SET_TARGET_PROPERTIES(${MA27_LIBRARY} PROPERTIES COMPILE_FLAGS "-fno-common")
+  endif()
+
+  SET_PROPERTY(TARGET pynumero_MA27 PROPERTY POSITION_INDEPENDENT_CODE ON)
+  TARGET_INCLUDE_DIRECTORIES( pynumero_MA27 PUBLIC ${MA27_INCLUDE_DIRS})
+  TARGET_LINK_LIBRARIES( pynumero_MA27
+                         ${HSL_IPOPT_LIB}
+                         ${MA27_LIBRARY}
+                         ${CMAKE_DL_LIBS}
+                         gfortran)
+
+  INSTALL(TARGETS pynumero_MA27
+          DESTINATION lib
+         )
+  INSTALL(DIRECTORY src
+          DESTINATION include
+  	     )
+endif()
+
+if (${BUILD_MA57})
+  ADD_LIBRARY(pynumero_MA57 SHARED src/ma57Interface.cpp)
+
+  if (IPOPT_PATH)
+    SET( MA57_INCLUDE_DIRS "")
+    FIND_LIBRARY(HSL_IPOPT_LIB
+                 NAMES coinhsl libcoinhsl
+                 HINTS "${IPOPT_PATH}/lib/"
+                 )
+  else()
+    MESSAGE( STATUS "Need IPOPT_PATH to build ma57 library")
+  endif()
+
+  SET_PROPERTY(TARGET pynumero_MA57 PROPERTY POSITION_INDEPENDENT_CODE ON)
+  TARGET_INCLUDE_DIRECTORIES( pynumero_MA57 PUBLIC ${MA57_INCLUDE_DIRS})
+  TARGET_LINK_LIBRARIES( pynumero_MA57
+                         ${HSL_IPOPT_LIB}
+                         ${CMAKE_DL_LIBS}
+                         gfortran)
+
+  INSTALL(TARGETS pynumero_MA57
+          DESTINATION lib
+         )
+
+  INSTALL(DIRECTORY src
+          DESTINATION include
+ 	       )
 endif()
