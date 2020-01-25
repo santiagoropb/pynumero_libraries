@@ -4,7 +4,7 @@
 #include "getstub.h"
 
 #include <vector>
-
+#include <string>
 AmplInterface::AmplInterface()
    :
    _p_asl(NULL), // pointer to the ASL struct
@@ -15,9 +15,13 @@ AmplInterface::AmplInterface()
 
 char* new_char_p_from_std_str(std::string str)
 {
-   char* ret = new char[str.length() + 1];
-   strcpy(ret, str.c_str());
-   return ret;
+  int len = str.size();
+  char* ret = new char[len + 1];
+  //strcpy(ret, str.c_str());
+  std::copy(str.begin(), str.end(), ret);
+  ret[len] = '\0';
+  return ret;
+  //return const_cast<char*>(str.c_str());
 }
 
 void AmplInterface::initialize(const char *nlfilename)
