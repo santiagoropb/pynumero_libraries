@@ -15,7 +15,7 @@ AmplInterface::AmplInterface()
 
 char* new_char_p_from_std_str(std::string str)
 {
-  int len = str.size();
+  size_t len = str.size();
   char* ret = new char[len + 1];
   //strcpy(ret, str.c_str());
   std::copy(str.begin(), str.end(), ret);
@@ -394,7 +394,10 @@ AmplInterfaceFile::AmplInterfaceFile()
 
 FILE* AmplInterfaceFile::open_nl(ASL_pfgh *asl, char* stub)
 {
-   _ASSERT_EXIT_(stub, "No .nl file was specified.");
+  #if defined(_WIN32) || defined(_WIN64)
+  #else
+  _ASSERT_EXIT_(stub, "No .nl file was specified.");
+  #endif
    return jac0dim(stub, (int) strlen(stub));
 }
 
